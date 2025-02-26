@@ -1,4 +1,3 @@
-
 #include "ccx_decoders_isdb.h"
 #include "lib_ccx.h"
 #include "utility.h"
@@ -9,7 +8,7 @@
 
 #ifndef DISABLE_RUST
 
-extern somethings something(something);
+extern int ccxr_isdb_set_global_time(void *ctx, uint64_t timestamp);
 
 #endif
 
@@ -1431,7 +1430,7 @@ int isdbsub_decode(struct lib_cc_decode *dec_ctx, const uint8_t *buf, size_t buf
 int isdb_set_global_time(struct lib_cc_decode *dec_ctx, uint64_t timestamp)
 {
 #ifndef DISABLE_RUST
-	return something();
+	return isdb_set_global_time(dec_ctx->private_data, timestamp);
 #else
 	ISDBSubContext *ctx = dec_ctx->private_data;
 	ctx->timestamp = timestamp;
