@@ -7,6 +7,12 @@
 // #define DEBUG
 // #define COMMAND_DEBUG
 
+#ifndef DISABLE_RUST
+
+extern somethings something(something);
+
+#endif
+
 #ifdef DEBUG
 #define isdb_log(format, ...) mprint(format, ##__VA_ARGS__)
 #else
@@ -1424,7 +1430,11 @@ int isdbsub_decode(struct lib_cc_decode *dec_ctx, const uint8_t *buf, size_t buf
 }
 int isdb_set_global_time(struct lib_cc_decode *dec_ctx, uint64_t timestamp)
 {
+#ifndef DISABLE_RUST
+	return something();
+#else
 	ISDBSubContext *ctx = dec_ctx->private_data;
 	ctx->timestamp = timestamp;
 	return CCX_OK;
+#endif
 }
