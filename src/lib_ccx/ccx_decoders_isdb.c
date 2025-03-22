@@ -604,9 +604,6 @@ static int get_text(ISDBSubContext *ctx, unsigned char *buffer, int len)
 
 static void set_writing_format(ISDBSubContext *ctx, uint8_t *arg)
 {
-#ifdef DISABLE_RUST
-	ccxr_set_writing_format(&ctx, arg);
-#else
 	ISDBSubLayout *ls = &ctx->current_state.layout_state;
 
 	/* One param means its initialization */
@@ -659,7 +656,6 @@ static void set_writing_format(ISDBSubContext *ctx, uint8_t *arg)
 	}
 
 	return;
-#endif
 }
 
 /** move pen position to (col, row) relative to display area's top left.
