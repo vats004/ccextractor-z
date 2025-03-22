@@ -322,7 +322,6 @@ static void init_layout(ISDBSubLayout *ls)
 
 	ls->font_scale.fscx = 100;
 	ls->font_scale.fscy = 100;
-
 }
 
 void *init_isdb_decoder(void)
