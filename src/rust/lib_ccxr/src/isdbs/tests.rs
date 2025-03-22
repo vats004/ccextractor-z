@@ -5,6 +5,8 @@ use crate::isdbs::isdbs::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CString;
+    use std::ptr;
 
     #[test]
     fn test_layout_get_height_horizontal_960x540() {
@@ -80,11 +82,6 @@ mod tests {
     fn test_layout_get_width_default() {
         assert_eq!(layout_get_width(WritingFormat::None), 720);
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn test_isdb_set_global_time() {
@@ -221,12 +218,6 @@ mod tests {
             assert_eq!(list_head.prev, &mut list_head as *mut _);
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ptr;
 
     #[test]
     fn test_free() {
@@ -265,10 +256,7 @@ mod tests {
             assert!(ptr.is_null());
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
     use super::*;
     use std::ptr;
 
@@ -389,10 +377,7 @@ mod tests {
             assert_eq!(head.next, &mut node2);
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
     use super::*;
     use std::ptr;
 
@@ -490,12 +475,6 @@ mod tests {
         let offset = unsafe { ccx_offsetof(b"list\0".as_ptr()) };
         assert_eq!(offset, std::mem::offset_of!(ISDBText, list));
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ptr;
 
     #[test]
     fn test_delete_isdb_decoder_empty() {
@@ -570,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_isdb_decoder_with_entries() {
+    unsafe fn test_delete_isdb_decoder_with_entries() {
         let mut ctx = ISDBSubContext {
             text_list_head: ListHead {
                 next: ptr::null_mut(),
@@ -641,10 +620,7 @@ mod tests {
             assert_eq!(ctx.buffered_text.prev, &mut ctx.buffered_text as *mut _);
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
     use super::*;
     use std::fmt::Write;
 
@@ -656,10 +632,7 @@ mod tests {
         // Since isdb_log does nothing, there's nothing to assert here.
         // This test ensures that the function can be called without errors.
     }
-}
 
-#[cfg(test)]
-mod tests {
     use super::*;
     use std::alloc::{alloc, dealloc, Layout};
 
@@ -708,22 +681,19 @@ mod tests {
             timestamp: 0,
             refcount: 0,
         };
-    
+
         unsafe {
             assert_eq!(reserve_buf(&mut text, 100), 0);
             assert_eq!(text.len, 128);
-    
+
             assert_eq!(reserve_buf(&mut text, 200), 0);
             assert!(text.len >= 328);
-    
+
             let layout = Layout::from_size_align(text.len, 1).unwrap();
             dealloc(text.buf as *mut u8, layout);
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
     use super::*;
     use std::ptr;
 
@@ -813,13 +783,6 @@ mod tests {
             assert_eq!(count, 2);
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::CString;
-    use std::ptr;
 
     #[test]
     fn test_append_char() {
@@ -907,13 +870,6 @@ mod tests {
 
         assert!(list_empty(&head));
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::CString;
-    use std::ptr;
 
     #[test]
     fn test_append_char() {
@@ -1133,12 +1089,6 @@ mod tests {
             WritingFormat::HorizontalStdDensity
         );
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ptr;
 
     #[test]
     fn test_move_penpos() {
@@ -1349,12 +1299,6 @@ mod tests {
             WritingFormat::HorizontalStdDensity
         );
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ptr;
 
     #[test]
     fn test_parse_command() {
@@ -1489,15 +1433,6 @@ mod tests {
         assert_eq!(ctx.nb_lang, 1);
         assert_eq!(ctx.dmf, 0x10);
     }
-}
-
-/* -------------------------- */
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::CString;
-    use std::ptr;
 
     #[test]
     fn test_add_cc_sub_text() {
@@ -1540,14 +1475,6 @@ mod tests {
         assert_eq!(sub.mode, [109, 111, 100, 101, 0]); // "mode" in ASCII
         assert_eq!(sub.got_output, 1);
     }
-}
-
-/* -------------------------- */
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ptr;
 
     #[test]
     fn test_parse_statement() {
