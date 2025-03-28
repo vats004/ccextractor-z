@@ -1,8 +1,32 @@
-
 #include "ccx_decoders_isdb.h"
 #include "lib_ccx.h"
 #include "utility.h"
 #include "limits.h"
+
+#ifndef DISABLE_RUST
+
+extern int ccxr_isdb_set_global_time(
+	struct lib_cc_decode *dec_ctx,
+	unsigned long long timestamp);
+
+extern void ccxr_delete_isdb_decoder(
+	void **isdb_ctx);
+
+extern struct ISDBSubContext *ccxr_init_isdb_decoder(
+	void);
+
+extern int ccxr_isdb_parse_data_group(
+	struct ISDBSubContext *codec_ctx,
+	const unsigned char *buf,
+	struct cc_subtitle *sub);
+
+extern int ccxr_isdbsub_decode(
+	struct lib_cc_decode *dec_ctx,
+	const unsigned char *buf,
+	size_t buf_len,
+	struct cc_subtitle *sub);
+
+#endif
 
 // #define DEBUG
 // #define COMMAND_DEBUG
@@ -139,34 +163,34 @@ enum isdb_tmd
 #define RGBA(r, g, b, a) (((unsigned)(255 - (a)) << 24) | ((b) << 16) | ((g) << 8) | (r))
 typedef uint32_t rgba;
 static rgba Default_clut[128] =
-    {
-	// 0-7
-	RGBA(0, 0, 0, 255), RGBA(255, 0, 0, 255), RGBA(0, 255, 0, 255), RGBA(255, 255, 0, 255),
-	RGBA(0, 0, 255, 255), RGBA(255, 0, 255, 255), RGBA(0, 255, 255, 255), RGBA(255, 255, 255, 255),
-	// 8-15
-	RGBA(0, 0, 0, 0), RGBA(170, 0, 0, 255), RGBA(0, 170, 0, 255), RGBA(170, 170, 0, 255),
-	RGBA(0, 0, 170, 255), RGBA(170, 0, 170, 255), RGBA(0, 170, 170, 255), RGBA(170, 170, 170, 255),
-	// 16-23
-	RGBA(0, 0, 85, 255), RGBA(0, 85, 0, 255), RGBA(0, 85, 85, 255), RGBA(0, 85, 170, 255),
-	RGBA(0, 85, 255, 255), RGBA(0, 170, 85, 255), RGBA(0, 170, 255, 255), RGBA(0, 255, 85, 255),
-	// 24-31
-	RGBA(0, 255, 170, 255), RGBA(85, 0, 0, 255), RGBA(85, 0, 85, 255), RGBA(85, 0, 170, 255),
-	RGBA(85, 0, 255, 255), RGBA(85, 85, 0, 255), RGBA(85, 85, 85, 255), RGBA(85, 85, 170, 255),
-	// 32-39
-	RGBA(85, 85, 255, 255), RGBA(85, 170, 0, 255), RGBA(85, 170, 85, 255), RGBA(85, 170, 170, 255),
-	RGBA(85, 170, 255, 255), RGBA(85, 255, 0, 255), RGBA(85, 255, 85, 255), RGBA(85, 255, 170, 255),
-	// 40-47
-	RGBA(85, 255, 255, 255), RGBA(170, 0, 85, 255), RGBA(170, 0, 255, 255), RGBA(170, 85, 0, 255),
-	RGBA(170, 85, 85, 255), RGBA(170, 85, 170, 255), RGBA(170, 85, 255, 255), RGBA(170, 170, 85, 255),
-	// 48-55
-	RGBA(170, 170, 255, 255), RGBA(170, 255, 0, 255), RGBA(170, 255, 85, 255), RGBA(170, 255, 170, 255),
-	RGBA(170, 255, 255, 255), RGBA(255, 0, 85, 255), RGBA(255, 0, 170, 255), RGBA(255, 85, 0, 255),
-	// 56-63
-	RGBA(255, 85, 85, 255), RGBA(255, 85, 170, 255), RGBA(255, 85, 255, 255), RGBA(255, 170, 0, 255),
-	RGBA(255, 170, 85, 255), RGBA(255, 170, 170, 255), RGBA(255, 170, 255, 255), RGBA(255, 255, 85, 255),
-	// 64
-	RGBA(255, 255, 170, 255),
-	// 65-127 are calculated later.
+	{
+		// 0-7
+		RGBA(0, 0, 0, 255), RGBA(255, 0, 0, 255), RGBA(0, 255, 0, 255), RGBA(255, 255, 0, 255),
+		RGBA(0, 0, 255, 255), RGBA(255, 0, 255, 255), RGBA(0, 255, 255, 255), RGBA(255, 255, 255, 255),
+		// 8-15
+		RGBA(0, 0, 0, 0), RGBA(170, 0, 0, 255), RGBA(0, 170, 0, 255), RGBA(170, 170, 0, 255),
+		RGBA(0, 0, 170, 255), RGBA(170, 0, 170, 255), RGBA(0, 170, 170, 255), RGBA(170, 170, 170, 255),
+		// 16-23
+		RGBA(0, 0, 85, 255), RGBA(0, 85, 0, 255), RGBA(0, 85, 85, 255), RGBA(0, 85, 170, 255),
+		RGBA(0, 85, 255, 255), RGBA(0, 170, 85, 255), RGBA(0, 170, 255, 255), RGBA(0, 255, 85, 255),
+		// 24-31
+		RGBA(0, 255, 170, 255), RGBA(85, 0, 0, 255), RGBA(85, 0, 85, 255), RGBA(85, 0, 170, 255),
+		RGBA(85, 0, 255, 255), RGBA(85, 85, 0, 255), RGBA(85, 85, 85, 255), RGBA(85, 85, 170, 255),
+		// 32-39
+		RGBA(85, 85, 255, 255), RGBA(85, 170, 0, 255), RGBA(85, 170, 85, 255), RGBA(85, 170, 170, 255),
+		RGBA(85, 170, 255, 255), RGBA(85, 255, 0, 255), RGBA(85, 255, 85, 255), RGBA(85, 255, 170, 255),
+		// 40-47
+		RGBA(85, 255, 255, 255), RGBA(170, 0, 85, 255), RGBA(170, 0, 255, 255), RGBA(170, 85, 0, 255),
+		RGBA(170, 85, 85, 255), RGBA(170, 85, 170, 255), RGBA(170, 85, 255, 255), RGBA(170, 170, 85, 255),
+		// 48-55
+		RGBA(170, 170, 255, 255), RGBA(170, 255, 0, 255), RGBA(170, 255, 85, 255), RGBA(170, 255, 170, 255),
+		RGBA(170, 255, 255, 255), RGBA(255, 0, 85, 255), RGBA(255, 0, 170, 255), RGBA(255, 85, 0, 255),
+		// 56-63
+		RGBA(255, 85, 85, 255), RGBA(255, 85, 170, 255), RGBA(255, 85, 255, 255), RGBA(255, 170, 0, 255),
+		RGBA(255, 170, 85, 255), RGBA(255, 170, 170, 255), RGBA(255, 170, 255, 255), RGBA(255, 255, 85, 255),
+		// 64
+		RGBA(255, 255, 170, 255),
+		// 65-127 are calculated later.
 };
 
 struct ISDBPos
@@ -222,7 +246,7 @@ typedef struct
 	int auto_display; // bool. forced to be displayed w/o user interaction
 	int rollup_mode;  // bool
 
-	uint8_t need_init;     // bool
+	uint8_t need_init;	   // bool
 	uint8_t clut_high_idx; // color = default_clut[high_idx << 4 | low_idx]
 
 	uint32_t fg_color;
@@ -281,6 +305,9 @@ typedef struct
  */
 void delete_isdb_decoder(void **isdb_ctx)
 {
+#ifndef DISABLE_RUST
+	ccxr_delete_isdb_decoder(isdb_ctx);
+#else
 	ISDBSubContext *ctx = *isdb_ctx;
 	struct ISDBText *text = NULL;
 	struct ISDBText *text1 = NULL;
@@ -298,6 +325,7 @@ void delete_isdb_decoder(void **isdb_ctx)
 		free(text);
 	}
 	freep(isdb_ctx);
+#endif
 }
 
 static void init_layout(ISDBSubLayout *ls)
@@ -312,6 +340,9 @@ static void init_layout(ISDBSubLayout *ls)
 
 void *init_isdb_decoder(void)
 {
+#ifndef DISABLE_RUST
+	return ccxr_init_isdb_decoder();
+#else
 	ISDBSubContext *ctx;
 
 	ctx = malloc(sizeof(ISDBSubContext));
@@ -326,6 +357,7 @@ void *init_isdb_decoder(void)
 	ctx->current_state.rollup_mode = 0;
 	init_layout(&ctx->current_state.layout_state);
 	return ctx;
+#endif
 }
 
 /**
@@ -469,6 +501,18 @@ static int ccx_strstr_ignorespace(const unsigned char *str1, const unsigned char
 	}
 	return 1;
 }
+
+// convert to pure rust - use isdb_fn.rs as context.
+// assume everything defined - use isdb_fn.rs to find required structs and functions.
+// process only given code for conversion to rust, do not define anything else.
+// take a note of undefined requirements and leave that to me,
+// use either option<> for defining `struct ISDBText *text = NULL;` and subsequent usage
+// do not use malloc/free/freep
+// use listhead implementations new, init_list_head, list_add,
+// list_add_tail, list_del, list_for_each_entry, list_for_each_entry_safe, list_empty for any list_fn
+// use the std::ptr::copy function for a memcpy-like functionality
+// remember to cast entry type &ListHead to the appropriate type (e.g., ISDBText)
+
 /**
  * Copy data not more then len provided
  * User should check for return type to check how much data he has got
@@ -604,16 +648,16 @@ static void set_writing_format(ISDBSubContext *ctx, uint8_t *arg)
 	{
 		switch (*arg & 0x0f)
 		{
-			case 0:
-				// ctx->font_size = SMALL_FONT_SIZE;
-				break;
-			case 1:
-				// ctx->font_size = MIDDLE_FONT_SIZE;
-				break;
-			case 2:
-				// ctx->font_size = STANDARD_FONT_SIZE;
-			default:
-				break;
+		case 0:
+			// ctx->font_size = SMALL_FONT_SIZE;
+			break;
+		case 1:
+			// ctx->font_size = MIDDLE_FONT_SIZE;
+			break;
+		case 2:
+			// ctx->font_size = STANDARD_FONT_SIZE;
+		default:
+			break;
 		}
 		arg += 2;
 	}
@@ -732,81 +776,81 @@ static int parse_csi(ISDBSubContext *ctx, const uint8_t *buf, int len)
 
 	switch (*buf)
 	{
-		/* Set Writing Format */
-		case CSI_CMD_SWF:
-			isdb_command_log("Command:CSI: SWF\n");
-			set_writing_format(ctx, arg);
-			break;
-			/* Composite Character Composition */
-		case CSI_CMD_CCC:
-			isdb_command_log("Command:CSI: CCC\n");
-			ret = get_csi_params(arg, &p1, NULL);
-			if (ret > 0)
-			{
-				ls->ccc = p1;
-			}
-			break;
-			/* Set Display Format */
-		case CSI_CMD_SDF:
-			ret = get_csi_params(arg, &p1, &p2);
-			if (ret > 0)
-			{
-				ls->display_area.w = p1;
-				ls->display_area.h = p2;
-			}
-			isdb_command_log("Command:CSI: SDF (w:%d, h:%d)\n", p1, p2);
-			break;
-			/* Character composition dot designation */
-		case CSI_CMD_SSM:
-			ret = get_csi_params(arg, &p1, &p2);
-			if (ret > 0)
-				ls->font_size = p1;
-			isdb_command_log("Command:CSI: SSM (x:%d y:%d)\n", p1, p2);
-			break;
-			/* Set Display Position */
-		case CSI_CMD_SDP:
-			ret = get_csi_params(arg, &p1, &p2);
-			if (ret > 0)
-			{
-				ls->display_area.x = p1;
-				ls->display_area.y = p2;
-			}
-			isdb_command_log("Command:CSI: SDP (x:%d, y:%d)\n", p1, p2);
-			break;
-			/* Raster Colour command */
-		case CSI_CMD_RCS:
-			ret = get_csi_params(arg, &p1, NULL);
-			if (ret > 0)
-				ctx->current_state.raster_color = Default_clut[ctx->current_state.clut_high_idx << 4 | p1];
-			isdb_command_log("Command:CSI: RCS (%d)\n", p1);
-			break;
-			/* Set Horizontal Spacing */
-		case CSI_CMD_SHS:
-			ret = get_csi_params(arg, &p1, NULL);
-			if (ret > 0)
-				ls->cell_spacing.col = p1;
-			isdb_command_log("Command:CSI: SHS (%d)\n", p1);
-			break;
-			/* Set Vertical Spacing */
-		case CSI_CMD_SVS:
-			ret = get_csi_params(arg, &p1, NULL);
-			if (ret > 0)
-				ls->cell_spacing.row = p1;
-			isdb_command_log("Command:CSI: SVS (%d)\n", p1);
-			break;
-			/* Active Coordinate Position Set */
-		case CSI_CMD_ACPS:
-			isdb_command_log("Command:CSI: ACPS\n");
-			ret = get_csi_params(arg, &p1, &p2);
-			if (ret > 0)
-			{
-				ls->acps[0] = p1;
-				ls->acps[1] = p1;
-			}
-			break;
-		default:
-			isdb_log("Command:CSI: Unknown command 0x%x\n", *buf);
-			break;
+	/* Set Writing Format */
+	case CSI_CMD_SWF:
+		isdb_command_log("Command:CSI: SWF\n");
+		set_writing_format(ctx, arg);
+		break;
+		/* Composite Character Composition */
+	case CSI_CMD_CCC:
+		isdb_command_log("Command:CSI: CCC\n");
+		ret = get_csi_params(arg, &p1, NULL);
+		if (ret > 0)
+		{
+			ls->ccc = p1;
+		}
+		break;
+		/* Set Display Format */
+	case CSI_CMD_SDF:
+		ret = get_csi_params(arg, &p1, &p2);
+		if (ret > 0)
+		{
+			ls->display_area.w = p1;
+			ls->display_area.h = p2;
+		}
+		isdb_command_log("Command:CSI: SDF (w:%d, h:%d)\n", p1, p2);
+		break;
+		/* Character composition dot designation */
+	case CSI_CMD_SSM:
+		ret = get_csi_params(arg, &p1, &p2);
+		if (ret > 0)
+			ls->font_size = p1;
+		isdb_command_log("Command:CSI: SSM (x:%d y:%d)\n", p1, p2);
+		break;
+		/* Set Display Position */
+	case CSI_CMD_SDP:
+		ret = get_csi_params(arg, &p1, &p2);
+		if (ret > 0)
+		{
+			ls->display_area.x = p1;
+			ls->display_area.y = p2;
+		}
+		isdb_command_log("Command:CSI: SDP (x:%d, y:%d)\n", p1, p2);
+		break;
+		/* Raster Colour command */
+	case CSI_CMD_RCS:
+		ret = get_csi_params(arg, &p1, NULL);
+		if (ret > 0)
+			ctx->current_state.raster_color = Default_clut[ctx->current_state.clut_high_idx << 4 | p1];
+		isdb_command_log("Command:CSI: RCS (%d)\n", p1);
+		break;
+		/* Set Horizontal Spacing */
+	case CSI_CMD_SHS:
+		ret = get_csi_params(arg, &p1, NULL);
+		if (ret > 0)
+			ls->cell_spacing.col = p1;
+		isdb_command_log("Command:CSI: SHS (%d)\n", p1);
+		break;
+		/* Set Vertical Spacing */
+	case CSI_CMD_SVS:
+		ret = get_csi_params(arg, &p1, NULL);
+		if (ret > 0)
+			ls->cell_spacing.row = p1;
+		isdb_command_log("Command:CSI: SVS (%d)\n", p1);
+		break;
+		/* Active Coordinate Position Set */
+	case CSI_CMD_ACPS:
+		isdb_command_log("Command:CSI: ACPS\n");
+		ret = get_csi_params(arg, &p1, &p2);
+		if (ret > 0)
+		{
+			ls->acps[0] = p1;
+			ls->acps[1] = p1;
+		}
+		break;
+	default:
+		isdb_log("Command:CSI: Unknown command 0x%x\n", *buf);
+		break;
 	}
 	buf++;
 	/* ACtual CSI command */
@@ -827,332 +871,332 @@ static int parse_command(ISDBSubContext *ctx, const uint8_t *buf, int len)
 	{
 		switch (code_lo)
 		{
-			/* NUL Control code, which can be added or deleted without effecting to
-				information content. */
-			case 0x0:
-				isdb_command_log("Command: NUL\n");
-				break;
+		/* NUL Control code, which can be added or deleted without effecting to
+			information content. */
+		case 0x0:
+			isdb_command_log("Command: NUL\n");
+			break;
 
-				/* BEL Control code used when calling attention (alarm or signal) */
-			case 0x7:
-				// TODO add bell character here
-				isdb_command_log("Command: BEL\n");
-				break;
+			/* BEL Control code used when calling attention (alarm or signal) */
+		case 0x7:
+			// TODO add bell character here
+			isdb_command_log("Command: BEL\n");
+			break;
 
-				/**
-				 *  APB: Active position goes backward along character path in the length of
-				 *	character path of character field. When the reference point of the character
-				 *	field exceeds the edge of display area by this movement, move in the
-				 *	opposite side of the display area along the character path of the active
-				 * 	position, for active position up.
-				 */
-			case 0x8:
-				isdb_command_log("Command: ABP\n");
-				break;
+			/**
+			 *  APB: Active position goes backward along character path in the length of
+			 *	character path of character field. When the reference point of the character
+			 *	field exceeds the edge of display area by this movement, move in the
+			 *	opposite side of the display area along the character path of the active
+			 * 	position, for active position up.
+			 */
+		case 0x8:
+			isdb_command_log("Command: ABP\n");
+			break;
 
-				/**
-				 *  APF: Active position goes forward along character path in the length of
-				 *	character path of character field. When the reference point of the character
-				 *	field exceeds the edge of display area by this movement, move in the
-				 * 	opposite side of the display area along the character path of the active
-				 *	position, for active position down.
-				 */
-			case 0x9:
-				isdb_command_log("Command: APF\n");
-				break;
+			/**
+			 *  APF: Active position goes forward along character path in the length of
+			 *	character path of character field. When the reference point of the character
+			 *	field exceeds the edge of display area by this movement, move in the
+			 * 	opposite side of the display area along the character path of the active
+			 *	position, for active position down.
+			 */
+		case 0x9:
+			isdb_command_log("Command: APF\n");
+			break;
 
-				/**
-				 *  APD: Moves to next line along line direction in the length of line direction of
-				 *	the character field. When the reference point of the character field exceeds
-				 *	the edge of display area by this movement, move to the first line of the
-				 *	display area along the line direction.
-				 */
-			case 0xA:
-				isdb_command_log("Command: APD\n");
-				break;
+			/**
+			 *  APD: Moves to next line along line direction in the length of line direction of
+			 *	the character field. When the reference point of the character field exceeds
+			 *	the edge of display area by this movement, move to the first line of the
+			 *	display area along the line direction.
+			 */
+		case 0xA:
+			isdb_command_log("Command: APD\n");
+			break;
 
-				/**
-				 * APU: Moves to the previous line along line direction in the length of line
-				 *	direction of the character field. When the reference point of the character
-				 *	field exceeds the edge of display area by this movement, move to the last
-				 *	line of the display area along the line direction.
-				 */
-			case 0xB:
-				isdb_command_log("Command: APU\n");
-				break;
+			/**
+			 * APU: Moves to the previous line along line direction in the length of line
+			 *	direction of the character field. When the reference point of the character
+			 *	field exceeds the edge of display area by this movement, move to the last
+			 *	line of the display area along the line direction.
+			 */
+		case 0xB:
+			isdb_command_log("Command: APU\n");
+			break;
 
-				/**
-				 * CS: Display area of the display screen is erased.
-				 * Specs does not say clearly about whether we have to clear cursor
-				 * Need Samples to see whether CS is called after pen move or before it
-				 */
-			case 0xC:
-				isdb_command_log("Command: CS clear Screen\n");
-				break;
+			/**
+			 * CS: Display area of the display screen is erased.
+			 * Specs does not say clearly about whether we have to clear cursor
+			 * Need Samples to see whether CS is called after pen move or before it
+			 */
+		case 0xC:
+			isdb_command_log("Command: CS clear Screen\n");
+			break;
 
-				/** APR: Active position down is made, moving to the first position of the same
-				 *	line.
-				 */
-			case 0xD:
-				isdb_command_log("Command: APR\n");
-				break;
+			/** APR: Active position down is made, moving to the first position of the same
+			 *	line.
+			 */
+		case 0xD:
+			isdb_command_log("Command: APR\n");
+			break;
 
-				/* LS1: Code to invoke character code set. */
-			case 0xE:
-				isdb_command_log("Command: LS1\n");
-				break;
+			/* LS1: Code to invoke character code set. */
+		case 0xE:
+			isdb_command_log("Command: LS1\n");
+			break;
 
-				/* LS0: Code to invoke character code set. */
-			case 0xF:
-				isdb_command_log("Command: LS0\n");
-				break;
-				/* Verify the new version of specs or packet is corrupted */
-			default:
-				isdb_command_log("Command: Unknown\n");
-				break;
+			/* LS0: Code to invoke character code set. */
+		case 0xF:
+			isdb_command_log("Command: LS0\n");
+			break;
+			/* Verify the new version of specs or packet is corrupted */
+		default:
+			isdb_command_log("Command: Unknown\n");
+			break;
 		}
 	}
 	else if (code_hi == 0x01)
 	{
 		switch (code_lo)
 		{
+		/**
+		 * PAPF: Active position forward is made in specified times by parameter P1 (1byte).
+		 *	Parameter P1 shall be within the range of 04/0 to 07/15 and time shall be
+		 *	specified within the range of 0 to 63 in binary value of 6-bit from b6 to b1.
+		 *	(b8 and b7 are not used.)
+		 */
+		case 0x6:
+			isdb_command_log("Command: PAPF\n");
+			break;
+
 			/**
-			 * PAPF: Active position forward is made in specified times by parameter P1 (1byte).
-			 *	Parameter P1 shall be within the range of 04/0 to 07/15 and time shall be
-			 *	specified within the range of 0 to 63 in binary value of 6-bit from b6 to b1.
-			 *	(b8 and b7 are not used.)
+			 * CAN: From the current active position to the end of the line is covered with
+			 *	background colour in the width of line direction in the current character
+			 *	field. Active position is not moved.
 			 */
-			case 0x6:
-				isdb_command_log("Command: PAPF\n");
-				break;
+		case 0x8:
+			isdb_command_log("Command: CAN\n");
+			break;
 
-				/**
-				 * CAN: From the current active position to the end of the line is covered with
-				 *	background colour in the width of line direction in the current character
-				 *	field. Active position is not moved.
-				 */
-			case 0x8:
-				isdb_command_log("Command: CAN\n");
-				break;
+			/* SS2: Code to invoke character code set. */
+		case 0x9:
+			isdb_command_log("Command: SS2\n");
+			break;
 
-				/* SS2: Code to invoke character code set. */
-			case 0x9:
-				isdb_command_log("Command: SS2\n");
-				break;
+			/* ESC:Code for code extension. */
+		case 0xB:
+			isdb_command_log("Command: ESC\n");
+			break;
 
-				/* ESC:Code for code extension. */
-			case 0xB:
-				isdb_command_log("Command: ESC\n");
-				break;
+			/** APS: Specified times of active position down is made by P1 (1 byte) of the first
+			 *	parameter in line direction length of character field from the first position
+			 *	of the first line of the display area. Then specified times of active position
+			 *	forward is made by the second parameter P2 (1 byte) in the character path
+			 *	length of character field. Each parameter shall be within the range of 04/0
+			 *	to 07/15 and specify time within the range of 0 to 63 in binary value of 6-
+			 *	bit from b6 to b1. (b8 and b7 are not used.)
+			 */
+		case 0xC:
+			isdb_command_log("Command: APS\n");
+			set_position(ctx, *buf & 0x3F, *(buf + 1) & 0x3F);
+			buf += 2;
+			break;
 
-				/** APS: Specified times of active position down is made by P1 (1 byte) of the first
-				 *	parameter in line direction length of character field from the first position
-				 *	of the first line of the display area. Then specified times of active position
-				 *	forward is made by the second parameter P2 (1 byte) in the character path
-				 *	length of character field. Each parameter shall be within the range of 04/0
-				 *	to 07/15 and specify time within the range of 0 to 63 in binary value of 6-
-				 *	bit from b6 to b1. (b8 and b7 are not used.)
-				 */
-			case 0xC:
-				isdb_command_log("Command: APS\n");
-				set_position(ctx, *buf & 0x3F, *(buf + 1) & 0x3F);
-				buf += 2;
-				break;
+			/* SS3: Code to invoke character code set. */
+		case 0xD:
+			isdb_command_log("Command: SS3\n");
+			break;
 
-				/* SS3: Code to invoke character code set. */
-			case 0xD:
-				isdb_command_log("Command: SS3\n");
-				break;
+			/**
+			 * RS: It is information division code and declares identification and
+			 * 	introduction of data header.
+			 */
+		case 0xE:
+			isdb_command_log("Command: RS\n");
+			break;
 
-				/**
-				 * RS: It is information division code and declares identification and
-				 * 	introduction of data header.
-				 */
-			case 0xE:
-				isdb_command_log("Command: RS\n");
-				break;
+			/**
+			 * US: It is information division code and declares identification and
+			 *	introduction of data unit.
+			 */
+		case 0xF:
+			isdb_command_log("Command: US\n");
+			break;
 
-				/**
-				 * US: It is information division code and declares identification and
-				 *	introduction of data unit.
-				 */
-			case 0xF:
-				isdb_command_log("Command: US\n");
-				break;
-
-				/* Verify the new version of specs or packet is corrupted */
-			default:
-				isdb_command_log("Command: Unknown\n");
-				break;
+			/* Verify the new version of specs or packet is corrupted */
+		default:
+			isdb_command_log("Command: Unknown\n");
+			break;
 		}
 	}
 	else if (code_hi == 0x8)
 	{
 		switch (code_lo)
 		{
-			/* BKF */
-			case 0x0:
-				/* RDF */
-			case 0x1:
-				/* GRF */
-			case 0x2:
-				/* YLF */
-			case 0x3:
-				/* BLF 	*/
-			case 0x4:
-				/* MGF */
-			case 0x5:
-				/* CNF */
-			case 0x6:
-				/* WHF */
-			case 0x7:
-				isdb_command_log("Command: Forground color (0x%X)\n", Default_clut[code_lo]);
-				state->fg_color = Default_clut[code_lo];
-				break;
+		/* BKF */
+		case 0x0:
+			/* RDF */
+		case 0x1:
+			/* GRF */
+		case 0x2:
+			/* YLF */
+		case 0x3:
+			/* BLF 	*/
+		case 0x4:
+			/* MGF */
+		case 0x5:
+			/* CNF */
+		case 0x6:
+			/* WHF */
+		case 0x7:
+			isdb_command_log("Command: Forground color (0x%X)\n", Default_clut[code_lo]);
+			state->fg_color = Default_clut[code_lo];
+			break;
 
-				/* SSZ */
-			case 0x8:
-				isdb_command_log("Command: SSZ\n");
-				ls->font_scale.fscx = 50;
-				ls->font_scale.fscy = 50;
-				break;
+			/* SSZ */
+		case 0x8:
+			isdb_command_log("Command: SSZ\n");
+			ls->font_scale.fscx = 50;
+			ls->font_scale.fscy = 50;
+			break;
 
-				/* MSZ */
-			case 0x9:
-				ls->font_scale.fscx = 200;
-				ls->font_scale.fscy = 200;
-				isdb_command_log("Command: MSZ\n");
-				break;
+			/* MSZ */
+		case 0x9:
+			ls->font_scale.fscx = 200;
+			ls->font_scale.fscy = 200;
+			isdb_command_log("Command: MSZ\n");
+			break;
 
-				/* NSZ */
-			case 0xA:
-				ls->font_scale.fscx = 100;
-				ls->font_scale.fscy = 100;
-				isdb_command_log("Command: NSZ\n");
-				break;
+			/* NSZ */
+		case 0xA:
+			ls->font_scale.fscx = 100;
+			ls->font_scale.fscy = 100;
+			isdb_command_log("Command: NSZ\n");
+			break;
 
-				/* SZX */
-			case 0xB:
-				isdb_command_log("Command: SZX\n");
-				buf++;
-				break;
+			/* SZX */
+		case 0xB:
+			isdb_command_log("Command: SZX\n");
+			buf++;
+			break;
 
-				/* Verify the new version of specs or packet is corrupted */
-			default:
-				isdb_command_log("Command: Unknown\n");
-				break;
+			/* Verify the new version of specs or packet is corrupted */
+		default:
+			isdb_command_log("Command: Unknown\n");
+			break;
 		}
 	}
 	else if (code_hi == 0x9)
 	{
 		switch (code_lo)
 		{
-			/* COL */
-			case 0x0:
-				/* Palette Col */
-				if (*buf == 0x20)
-				{
-					isdb_command_log("Command: COL: Set Clut %d\n", (buf[0] & 0x0F));
-					buf++;
-					ctx->current_state.clut_high_idx = (buf[0] & 0x0F);
-				}
-				else if ((*buf & 0XF0) == 0x40)
-				{
-					isdb_command_log("Command: COL: Set Forground 0x%08X\n", Default_clut[*buf & 0x0F]);
-					ctx->current_state.fg_color = Default_clut[*buf & 0x0F];
-				}
-				else if ((*buf & 0XF0) == 0x50)
-				{
-					isdb_command_log("Command: COL: Set Background 0x%08X\n", Default_clut[*buf & 0x0F]);
-					ctx->current_state.bg_color = Default_clut[*buf & 0x0F];
-				}
-				else if ((*buf & 0XF0) == 0x60)
-				{
-					isdb_command_log("Command: COL: Set half Forground 0x%08X\n", Default_clut[*buf & 0x0F]);
-					ctx->current_state.hfg_color = Default_clut[*buf & 0x0F];
-				}
-				else if ((*buf & 0XF0) == 0x70)
-				{
-					isdb_command_log("Command: COL: Set Half Background 0x%8X\n", Default_clut[*buf & 0x0F]);
-					ctx->current_state.hbg_color = Default_clut[*buf & 0x0F];
-				}
+		/* COL */
+		case 0x0:
+			/* Palette Col */
+			if (*buf == 0x20)
+			{
+				isdb_command_log("Command: COL: Set Clut %d\n", (buf[0] & 0x0F));
+				buf++;
+				ctx->current_state.clut_high_idx = (buf[0] & 0x0F);
+			}
+			else if ((*buf & 0XF0) == 0x40)
+			{
+				isdb_command_log("Command: COL: Set Forground 0x%08X\n", Default_clut[*buf & 0x0F]);
+				ctx->current_state.fg_color = Default_clut[*buf & 0x0F];
+			}
+			else if ((*buf & 0XF0) == 0x50)
+			{
+				isdb_command_log("Command: COL: Set Background 0x%08X\n", Default_clut[*buf & 0x0F]);
+				ctx->current_state.bg_color = Default_clut[*buf & 0x0F];
+			}
+			else if ((*buf & 0XF0) == 0x60)
+			{
+				isdb_command_log("Command: COL: Set half Forground 0x%08X\n", Default_clut[*buf & 0x0F]);
+				ctx->current_state.hfg_color = Default_clut[*buf & 0x0F];
+			}
+			else if ((*buf & 0XF0) == 0x70)
+			{
+				isdb_command_log("Command: COL: Set Half Background 0x%8X\n", Default_clut[*buf & 0x0F]);
+				ctx->current_state.hbg_color = Default_clut[*buf & 0x0F];
+			}
 
-				buf++;
-				break;
+			buf++;
+			break;
 
-				/* FLC */
-			case 0x1:
-				isdb_command_log("Command: FLC\n");
-				buf++;
-				break;
+			/* FLC */
+		case 0x1:
+			isdb_command_log("Command: FLC\n");
+			buf++;
+			break;
 
-				/* CDC */
-			case 0x2:
-				isdb_command_log("Command: CDC\n");
-				buf++;
-				buf++;
-				buf++;
-				break;
+			/* CDC */
+		case 0x2:
+			isdb_command_log("Command: CDC\n");
+			buf++;
+			buf++;
+			buf++;
+			break;
 
-				/* POL */
-			case 0x3:
-				isdb_command_log("Command: POL\n");
-				buf++;
-				break;
+			/* POL */
+		case 0x3:
+			isdb_command_log("Command: POL\n");
+			buf++;
+			break;
 
-				/* WMM */
-			case 0x4:
-				isdb_command_log("Command: WMM\n");
-				buf++;
-				buf++;
-				buf++;
-				break;
+			/* WMM */
+		case 0x4:
+			isdb_command_log("Command: WMM\n");
+			buf++;
+			buf++;
+			buf++;
+			break;
 
-				/* MACRO */
-			case 0x5:
-				isdb_command_log("Command: MACRO\n");
-				buf++;
-				break;
+			/* MACRO */
+		case 0x5:
+			isdb_command_log("Command: MACRO\n");
+			buf++;
+			break;
 
-				/* HLC */
-			case 0x7:
-				isdb_command_log("Command: HLC\n");
-				buf++;
-				break;
+			/* HLC */
+		case 0x7:
+			isdb_command_log("Command: HLC\n");
+			buf++;
+			break;
 
-				/* RPC */
-			case 0x8:
-				isdb_command_log("Command: RPC\n");
-				buf++;
-				break;
+			/* RPC */
+		case 0x8:
+			isdb_command_log("Command: RPC\n");
+			buf++;
+			break;
 
-				/* SPL */
-			case 0x9:
-				isdb_command_log("Command: SPL\n");
-				break;
+			/* SPL */
+		case 0x9:
+			isdb_command_log("Command: SPL\n");
+			break;
 
-				/* STL */
-			case 0xA:
-				isdb_command_log("Command: STL\n");
-				break;
+			/* STL */
+		case 0xA:
+			isdb_command_log("Command: STL\n");
+			break;
 
-				/* CSI Code for code system extension indicated*/
-			case 0xB:
-				ret = parse_csi(ctx, buf, len);
-				buf += ret;
-				break;
+			/* CSI Code for code system extension indicated*/
+		case 0xB:
+			ret = parse_csi(ctx, buf, len);
+			buf += ret;
+			break;
 
-				/* TIME */
-			case 0xD:
-				isdb_command_log("Command: TIME\n");
-				buf++;
-				buf++;
-				break;
+			/* TIME */
+		case 0xD:
+			isdb_command_log("Command: TIME\n");
+			buf++;
+			buf++;
+			break;
 
-				/* Verify the new version of specs or packet is corrupted */
-			default:
-				isdb_command_log("Command: Unknown\n");
-				break;
+			/* Verify the new version of specs or packet is corrupted */
+		default:
+			isdb_command_log("Command: Unknown\n");
+			break;
 		}
 	}
 
@@ -1195,14 +1239,14 @@ static int parse_caption_management_data(ISDBSubContext *ctx, const uint8_t *buf
 		ctx->offset_time.milli = ((*buf >> 4) * 100) + ((*buf & 0xf) * 10) + (buf[1] & 0xf);
 		buf += 2;
 		isdb_log("CC MGMT DATA: OTD( h:%d m:%d s:%d millis: %d\n",
-			 ctx->offset_time.hour, ctx->offset_time.min,
-			 ctx->offset_time.sec, ctx->offset_time.milli);
+				 ctx->offset_time.hour, ctx->offset_time.min,
+				 ctx->offset_time.sec, ctx->offset_time.milli);
 	}
 	else
 	{
 		isdb_log("Playback time is in accordance with the time of the clock,"
-			 "which is calibrated by clock signal (TDT). Playback time is"
-			 "given by PTS.\n");
+				 "which is calibrated by clock signal (TDT). Playback time is"
+				 "given by PTS.\n");
 	}
 	ctx->nb_lang = *buf;
 	isdb_log("CC MGMT DATA: nb languages: %d\n", ctx->nb_lang);
@@ -1280,9 +1324,9 @@ static int parse_data_unit(ISDBSubContext *ctx, const uint8_t *buf, int size)
 	buf += 3;
 	switch (unit_parameter)
 	{
-		/* statement body */
-		case 0x20:
-			parse_statement(ctx, buf, len);
+	/* statement body */
+	case 0x20:
+		parse_statement(ctx, buf, len);
 	}
 	return 0;
 }
@@ -1328,6 +1372,9 @@ static int parse_caption_statement_data(ISDBSubContext *ctx, int lang_id, const 
  */
 int isdb_parse_data_group(void *codec_ctx, const uint8_t *buf, struct cc_subtitle *sub)
 {
+#ifndef DISABLE_RUST
+	return ccxr_isdb_parse_data_group(codec_ctx, buf, sub);
+#else
 	ISDBSubContext *ctx = codec_ctx;
 	const uint8_t *buf_pivot = buf;
 	int id = (*buf >> 2);
@@ -1393,10 +1440,14 @@ int isdb_parse_data_group(void *codec_ctx, const uint8_t *buf, struct cc_subtitl
 	buf += 2;
 
 	return buf - buf_pivot;
+#endif
 }
 
 int isdbsub_decode(struct lib_cc_decode *dec_ctx, const uint8_t *buf, size_t buf_size, struct cc_subtitle *sub)
 {
+#ifndef DISABLE_RUST
+	return ccxr_isdbsub_decode(dec_ctx, buf, buf_size, sub);
+#else
 	const uint8_t *header_end = NULL;
 	int ret = 0;
 	ISDBSubContext *ctx = dec_ctx->private_data;
@@ -1421,10 +1472,16 @@ int isdbsub_decode(struct lib_cc_decode *dec_ctx, const uint8_t *buf, size_t buf
 		return -1;
 
 	return 1;
+#endif
 }
+
 int isdb_set_global_time(struct lib_cc_decode *dec_ctx, uint64_t timestamp)
 {
+#ifndef DISABLE_RUST
+	return ccxr_isdb_set_global_time(dec_ctx, timestamp);
+#else
 	ISDBSubContext *ctx = dec_ctx->private_data;
 	ctx->timestamp = timestamp;
 	return CCX_OK;
+#endif
 }
