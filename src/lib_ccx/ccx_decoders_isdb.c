@@ -1,4 +1,3 @@
-
 #include "ccx_decoders_isdb.h"
 #include "lib_ccx.h"
 #include "utility.h"
@@ -6,11 +5,26 @@
 
 #ifndef DISABLE_RUST
 
-extern int ccxr_isdb_set_global_time(struct lib_cc_decode *dec_ctx, uint64_t timestamp);
-extern void ccxr_delete_isdb_decoder(void **isdb_ctx);
-extern void *ccxr_init_isdb_decoder(void);
-extern int ccxr_isdb_parse_data_group(void *codec_ctx, const uint8_t *buf, int size, struct cc_subtitle *sub);
-extern int ccxr_isdbsub_decode(struct lib_cc_decode *dec_ctx, const uint8_t *buf, size_t buf_size, struct cc_subtitle *sub);
+extern int ccxr_isdb_set_global_time(
+    struct lib_cc_decode *dec_ctx,
+    unsigned long long timestamp);
+
+extern void ccxr_delete_isdb_decoder(
+    void **isdb_ctx);
+
+extern struct ISDBSubContext *ccxr_init_isdb_decoder(
+    void);
+
+extern int ccxr_isdb_parse_data_group(
+    struct ISDBSubContext *codec_ctx,
+    const unsigned char *buf,
+    struct cc_subtitle *sub);
+
+extern int ccxr_isdbsub_decode(
+    struct lib_cc_decode *dec_ctx,
+    const unsigned char *buf,
+    size_t buf_len,
+    struct cc_subtitle *sub);
 
 #endif
 
@@ -487,6 +501,18 @@ static int ccx_strstr_ignorespace(const unsigned char *str1, const unsigned char
 	}
 	return 1;
 }
+
+// convert to pure rust - use isdb_fn.rs as context.
+// assume everything defined - use isdb_fn.rs to find required structs and functions.
+// process only given code for conversion to rust, do not define anything else.
+// take a note of undefined requirements and leave that to me,
+// use either option<> for defining `struct ISDBText *text = NULL;` and subsequent usage
+// do not use malloc/free/freep
+// use listhead implementations new, init_list_head, list_add,
+// list_add_tail, list_del, list_for_each_entry, list_for_each_entry_safe, list_empty for any list_fn
+// use the std::ptr::copy function for a memcpy-like functionality
+// remember to cast entry type &ListHead to the appropriate type (e.g., ISDBText)
+
 /**
  * Copy data not more then len provided
  * User should check for return type to check how much data he has got
@@ -1347,7 +1373,7 @@ static int parse_caption_statement_data(ISDBSubContext *ctx, int lang_id, const 
 int isdb_parse_data_group(void *codec_ctx, const uint8_t *buf, struct cc_subtitle *sub)
 {
 #ifndef DISABLE_RUST
-	return ccxr_isdb_parse_data_group(codec_ctx, buf, 0, sub);
+	return ccxr_isdb_parse_data_group(codec_ctx, buf, sub);
 #else
 	ISDBSubContext *ctx = codec_ctx;
 	const uint8_t *buf_pivot = buf;
