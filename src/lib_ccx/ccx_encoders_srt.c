@@ -212,6 +212,7 @@ int write_cc_buffer_as_srt(struct eia608_screen *data, struct encoder_ctx *conte
 	{
 		if (data->row_used[i])
 		{
+			// Adjust the logic for speaker alignment and auto-dashing to prevent unintended characters.
 			if (context->autodash && context->trim_subs)
 			{
 				int first = 0, last = 31, center1 = -1, center2 = -1;
@@ -220,7 +221,8 @@ int write_cc_buffer_as_srt(struct eia608_screen *data, struct encoder_ctx *conte
 				find_limit_characters(line, &first, &last, CCX_DECODER_608_SCREEN_WIDTH);
 				if (first == -1 || last == -1) // Probably a bug somewhere though
 					break;
-				// Is there a speaker named, for example: TOM: What are you doing?
+
+				// Check for speaker name (e.g., "TOM:")
 				for (int j = first; j <= last; j++)
 				{
 					if (line[j] == ':')
@@ -231,38 +233,44 @@ int write_cc_buffer_as_srt(struct eia608_screen *data, struct encoder_ctx *conte
 					if (!isupper(line[j]))
 						break;
 				}
-				if (prev_line_start == -1)
+
+				// Refine dash logic to avoid unintended characters
+				if (prev_line_start == -1 ||
+				    (first == prev_line_start) ||			 // Left alignment
+				    (last == prev_line_end) ||				 // Right alignment
+				    (first > prev_line_start && last < prev_line_end) || // Fully contained
+				    ((first > prev_line_start && first < prev_line_end) ||
+				     (last > prev_line_start && last < prev_line_end)))
+				{ // Overlap
 					do_dash = 0;
-				if (first == prev_line_start) // Case of left alignment
-					do_dash = 0;
-				if (last == prev_line_end) // Right align
-					do_dash = 0;
-				if (first > prev_line_start && last < prev_line_end) // Fully contained
-					do_dash = 0;
-				if ((first > prev_line_start && first < prev_line_end) || // Overlap
-				    (last > prev_line_start && last < prev_line_end))
-					do_dash = 0;
+				}
 
 				center1 = (first + last) / 2;
 				if (colon_pos != -1)
 				{
 					while (colon_pos < CCX_DECODER_608_SCREEN_WIDTH &&
-					       (line[colon_pos] == ':' ||
-						line[colon_pos] == ' ' ||
-						line[colon_pos] == 0x89))
+					       (line[colon_pos] == ':' || line[colon_pos] == ' ' || line[colon_pos] == 0x89))
+					{
 						colon_pos++; // Find actual text
+					}
 					center2 = (colon_pos + last) / 2;
 				}
 				else
+				{
 					center2 = center1;
+				}
 
-				if (center1 >= prev_line_center1 - 1 && center1 <= prev_line_center1 + 1 && center1 != -1) // Center align
+				if ((center1 >= prev_line_center1 - 1 && center1 <= prev_line_center1 + 1 && center1 != -1) ||
+				    (center2 >= prev_line_center2 - 2 && center2 <= prev_line_center2 + 2 && center2 != -1))
+				{
 					do_dash = 0;
-				if (center2 >= prev_line_center2 - 2 && center1 <= prev_line_center2 + 2 && center1 != -1) // Center align
-					do_dash = 0;
+				}
 
 				if (do_dash)
-					write_wrapped(context->out->fh, "- ", 2);
+				{
+					write_wrapped(context->out->fh, "- ", 2); // Add dash
+				}
+
 				prev_line_start = first;
 				prev_line_end = last;
 				prev_line_center1 = center1;
