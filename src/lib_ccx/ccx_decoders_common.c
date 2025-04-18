@@ -93,6 +93,8 @@ int validate_cc_data_pair(unsigned char *cc_data_pair)
 	}
 	return 0;
 }
+
+// pub fn do_cb(ctx: &mut lib_cc_decode, dtvcc: &mut Dtvcc, cc_block: &[u8]) -> bool {
 int do_cb(struct lib_cc_decode *ctx, unsigned char *cc_block, struct cc_subtitle *sub)
 {
 	unsigned char cc_valid = (*cc_block & 4) >> 2;

@@ -610,6 +610,7 @@ dependencies = [
  "bitflags 2.9.0",
  "crc32fast",
  "derive_more",
+ "libc",
  "num_enum",
  "strum 0.26.3",
  "strum_macros 0.26.4",

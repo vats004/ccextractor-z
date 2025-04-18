@@ -288,9 +288,8 @@ int set_fts(struct ccx_common_timing_ctx *ctx)
 
 LLONG get_fts(struct ccx_common_timing_ctx *ctx, int current_field)
 {
-#ifndef DISABLE_RUST
-	return ccxr_get_fts(ctx, current_field);
-#endif
+
+	
 
 	LLONG fts;
 
