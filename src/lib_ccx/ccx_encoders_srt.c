@@ -58,6 +58,28 @@ int write_stringz_as_srt(char *string, struct encoder_ctx *context, LLONG ms_sta
 	unsigned char *begin = unescaped;
 	while (begin < unescaped + len)
 	{
+		// start - hauppauge-specific logic for handling unnecessary periods
+		// Thanks https://github.com/321david123
+		// if (ccx_options.hauppauge_mode)
+		{
+
+			// skip lines that are just a dot
+			if (strlen((const char *)begin) == 1 && begin[0] == '.')
+			{
+				begin += 2; // skip the dot and its terminator
+				continue;
+			}
+			// trim trailing spaces/tabs and dots
+			{
+				size_t L = strlen((char *)begin);
+				while (L && isspace((unsigned char)begin[L - 1]))
+					begin[--L] = '\0';
+				while (L && begin[L - 1] == '.')
+					begin[--L] = '\0';
+			}
+		}
+		// end - hauppauge-specific logic for handling unnecessary periods
+
 		unsigned int u = encode_line(context, el, begin);
 		if (context->encoding != CCX_ENC_UNICODE)
 		{
@@ -120,6 +142,21 @@ int write_cc_bitmap_as_srt(struct cc_subtitle *sub, struct encoder_ctx *context)
 				used = encode_line(context, context->buffer, (unsigned char *)timeline);
 				write_wrapped(context->out->fh, context->buffer, used);
 				len = strlen(str);
+
+				// start - hauppauge-specific logic for handling unnecessary periods
+				// Thanks https://github.com/321david123
+				// if (ccx_options.hauppauge_mode)
+				{
+					// trim trailing spaces/tabs and dots from OCR output
+					size_t L = len;
+					while (L && isspace((unsigned char)str[L - 1]))
+						str[--L] = '\0';
+					while (L && str[L - 1] == '.')
+						str[--L] = '\0';
+					len = L;
+				}
+				// end - hauppauge-specific logic for handling unnecessary periods
+
 				write_wrapped(context->out->fh, str, len);
 				write_wrapped(context->out->fh, context->encoded_crlf, context->encoded_crlf_length);
 			}
@@ -274,6 +311,19 @@ int write_cc_buffer_as_srt(struct eia608_screen *data, struct encoder_ctx *conte
 				dbg_print(CCX_DMT_DECODER_608, "\r");
 				dbg_print(CCX_DMT_DECODER_608, "%s\n", context->subline);
 			}
+
+			// start - hauppauge-specific logic for handling unnecessary periods
+			// Thanks https://github.com/321david123
+			// if (ccx_options.hauppauge_mode)
+			{
+				// trim trailing spaces/tabs and dots
+				while (length > 0 && isspace((unsigned char)context->subline[length - 1]))
+					context->subline[--length] = '\0';
+				while (length > 0 && context->subline[length - 1] == '.')
+					context->subline[--length] = '\0';
+			}
+			// end - hauppauge-specific logic for handling unnecessary periods
+
 			write_wrapped(context->out->fh, context->subline, length);
 			write_wrapped(context->out->fh, context->encoded_crlf, context->encoded_crlf_length);
 			wrote_something = 1;
